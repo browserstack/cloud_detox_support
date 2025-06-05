@@ -1,5 +1,6 @@
 // @ts-nocheck
 const ArtifactsManager = require('../ArtifactsManager');
+const CloudArtifactsManager = require('../CloudArtifactsManager');
 const {
   AndroidArtifactPluginsProvider,
   IosArtifactPluginsProvider,
@@ -47,10 +48,21 @@ class External extends ArtifactsManagerFactory {
   }
 }
 
+class Noop extends ArtifactsManagerFactory {
+  constructor() {
+    super(new EmptyProvider());
+  }
+  createArtifactsManager(artifactsConfig) {
+    const artifactsManager = new CloudArtifactsManager();
+    return artifactsManager;
+  }
+}
+
 module.exports = {
   ArtifactsManagerFactory,
   Android,
   Ios,
   IosSimulator,
   External,
+  Noop
 };
