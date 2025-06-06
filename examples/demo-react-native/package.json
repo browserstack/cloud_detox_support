@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "start": "react-native start",
-    "postinstall": "node scripts/postinstall.js",
     "bloat-bundle": "node scripts/bloatBundle.mjs",
     "build:ios": "detox build --configuration ios.sim.debug",
     "build:ios-debug": "detox build --configuration ios.sim.debug",
@@ -18,7 +17,6 @@
     "test:android-release": "detox test --configuration android.emu.release",
     "e2e:ios": "npm run build:ios-release && npm run test:ios-release",
     "e2e:android": "npm run build:android-release && npm run test:android-release",
-    "podInstall:ios": "cd ios && bundle exec pod install",
     "clean:android": "pushd android && ./gradlew clean && popd"
   },
   "dependencies": {
