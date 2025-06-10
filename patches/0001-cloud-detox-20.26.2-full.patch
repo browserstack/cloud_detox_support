@@ -1,0 +1,1271 @@
+diff --git a/detox/detox.d.ts b/detox/detox.d.ts
+index a846c3b9b..c9fd00076 100644
+--- a/detox/detox.d.ts
++++ b/detox/detox.d.ts
+@@ -33,6 +33,7 @@ declare global {
+             logger?: DetoxLoggerConfig;
+             session?: DetoxSessionConfig;
+             testRunner?: DetoxTestRunnerConfig;
++            cloudAuthentication?: DetoxCloudAuthConfig;
+             /** Build command for the entire configuration, overriding individual app build commands. */
+             build?: string;
+             /** Start command for the entire configuration, overriding individual app start commands. */
+@@ -134,6 +135,16 @@ declare global {
+             debugSynchronization?: number;
+             server?: string;
+             sessionId?: string;
++            local?: boolean;
++            forceLocal?: boolean;
++            localIdentifier?: string;
++            networkLogsIncludeHosts?: string[];
++            networkLogsExcludeHosts?: string[];
++        }
++
++        interface DetoxCloudAuthConfig {
++            username?: string;
++            accessKey?: string;
+         }
+ 
+         interface DetoxTestRunnerConfig {
+diff --git a/detox/package.json b/detox/package.json
+index 3973b176e..b9a42e1da 100644
+--- a/detox/package.json
++++ b/detox/package.json
+@@ -1,5 +1,5 @@
+ {
+-  "name": "detox",
++  "name": "@avinashbharti97/detox",
+   "description": "E2E tests and automation for mobile",
+   "version": "20.26.2",
+   "bin": {
+@@ -7,7 +7,7 @@
+   },
+   "repository": {
+     "type": "git",
+-    "url": "https://github.com/wix/Detox.git"
++    "url": "https://github.com/browserstack/cloud_detox_support.git"
+   },
+   "nativePackage": true,
+   "bugs": {
+@@ -30,8 +30,7 @@
+     "test": "npm run unit",
+     "posttest": "cp coverage/lcov.info coverage/unit.lcov",
+     "unit:watch": "jest --watch",
+-    "prepublish": "npm run build",
+-    "postinstall": "node scripts/postinstall.js"
++    "prepublish": "npm run build"
+   },
+   "devDependencies": {
+     "@react-native/babel-preset": "0.73.19",
+diff --git a/detox/src/DetoxWorker.js b/detox/src/DetoxWorker.js
+index 7d3f69a32..b7e89dc73 100644
+--- a/detox/src/DetoxWorker.js
++++ b/detox/src/DetoxWorker.js
+@@ -95,7 +95,7 @@ class DetoxWorker {
+     this._deviceConfig = deviceConfig;
+     this._sessionConfig = sessionConfig;
+     // @ts-ignore
+-    this._sessionConfig.sessionId = sessionConfig.sessionId || uuid.UUID();
++    this._sessionConfig.sessionId = uuid.UUID();
+     this._runtimeErrorComposer.appsConfig = this._appsConfig;
+ 
+     this._client = new Client(sessionConfig);
+diff --git a/detox/src/artifacts/CloudArtifactsManager.js b/detox/src/artifacts/CloudArtifactsManager.js
+new file mode 100644
+index 000000000..ba9fab327
+--- /dev/null
++++ b/detox/src/artifacts/CloudArtifactsManager.js
+@@ -0,0 +1,76 @@
++class CloudArtifactsManager {
++  constructor() {
++    this._idlePromise = Promise.resolve();
++    this._artifactPlugins = {};
++  }
++
++  async onBootDevice(deviceInfo) {
++    return this._idlePromise;
++  }
++
++  async onBeforeLaunchApp(appLaunchInfo) {
++    return this._idlePromise;
++  }
++
++  async onLaunchApp(appLaunchInfo) {
++    return this._idlePromise;
++  }
++
++  async onAppReady(appInfo) {
++    return this._idlePromise;
++  }
++
++  async onBeforeTerminateApp(appInfo) {
++    return this._idlePromise;
++  }
++
++  async onTerminateApp(appInfo) {
++    return this._idlePromise;
++  }
++
++  async onBeforeUninstallApp(appInfo) {
++    return this._idlePromise;
++  }
++
++  async onBeforeShutdownDevice(deviceInfo) {
++    return this._idlePromise;
++  }
++
++  async onShutdownDevice(deviceInfo) {
++    return this._idlePromise;
++  }
++
++  async onCreateExternalArtifact({ pluginId, artifactName, artifactPath }) {
++    return this._idlePromise;
++  }
++
++  async onRunDescribeStart(suite) {
++    return this._idlePromise;
++  }
++
++  async onTestStart(testSummary) {
++    return this._idlePromise;
++  }
++
++  async onHookFailure(testSummary) {
++    return this._idlePromise;
++  }
++
++  async onTestFnFailure(testSummary) {
++    return this._idlePromise;
++  }
++
++  async onTestDone(testSummary) {
++    return this._idlePromise;
++  }
++
++  async onRunDescribeFinish(suite) {
++    return this._idlePromise;
++  }
++
++  async onBeforeCleanup() {
++    return this._idlePromise;
++  }
++}
++
++module.exports = CloudArtifactsManager;
+diff --git a/detox/src/artifacts/factories/index.js b/detox/src/artifacts/factories/index.js
+index 782a0c50b..b7d90f1c2 100644
+--- a/detox/src/artifacts/factories/index.js
++++ b/detox/src/artifacts/factories/index.js
+@@ -1,5 +1,6 @@
+ // @ts-nocheck
+ const ArtifactsManager = require('../ArtifactsManager');
++const CloudArtifactsManager = require('../CloudArtifactsManager');
+ const {
+   AndroidArtifactPluginsProvider,
+   IosArtifactPluginsProvider,
+@@ -47,10 +48,21 @@ class External extends ArtifactsManagerFactory {
+   }
+ }
+ 
++class Noop extends ArtifactsManagerFactory {
++  constructor() {
++    super(new EmptyProvider());
++  }
++  createArtifactsManager(artifactsConfig) {
++    const artifactsManager = new CloudArtifactsManager();
++    return artifactsManager;
++  }
++}
++
+ module.exports = {
+   ArtifactsManagerFactory,
+   Android,
+   Ios,
+   IosSimulator,
+   External,
++  Noop
+ };
+diff --git a/detox/src/client/Client.js b/detox/src/client/Client.js
+index dd278fb60..b64526871 100644
+--- a/detox/src/client/Client.js
++++ b/detox/src/client/Client.js
+@@ -261,6 +261,22 @@ class Client {
+     await this.sendAction(new actions.DeliverPayload(params));
+   }
+ 
++  async waitForCloudPlatform(params) {
++    try {
++      const response = await this.sendAction(new actions.CloudPlatform(params));
++      if (params['method'] == 'terminateApp') {
++        await this.waitUntilDisconnected();
++      }
++      // else if (params['method'] == 'launchApp') {
++      //   this._onAppConnected();
++      // }
++      return response;
++    } catch (err) {
++      this._successfulTestRun = false;
++      throw err;
++    }
++  }
++
+   async terminateApp() {
+     /* see the property injection from Detox.js */
+   }
+diff --git a/detox/src/client/actions/actions.js b/detox/src/client/actions/actions.js
+index cc5279636..859350778 100644
+--- a/detox/src/client/actions/actions.js
++++ b/detox/src/client/actions/actions.js
+@@ -41,7 +41,7 @@ class Login extends Action {
+   }
+ 
+   get timeout() {
+-    return 1000;
++    return 240000;
+   }
+ 
+   async handle(response) {
+@@ -179,6 +179,26 @@ class Cleanup extends Action {
+   }
+ }
+ 
++class CloudPlatform extends Action {
++  constructor(params) {
++    super('CloudPlatform', params);
++  }
++
++  get isAtomic() {
++    return true;
++  }
++
++  get timeout() {
++    return 90000;
++  }
++
++  async handle(response) {
++    this.expectResponseOfType(response, 'CloudPlatform');
++    return response;
++  }
++}
++
++
+ class Invoke extends Action {
+   constructor(params) {
+     super('invoke', params);
+@@ -355,5 +375,6 @@ module.exports = {
+   SetOrientation,
+   SetInstrumentsRecordingState,
+   CaptureViewHierarchy,
++  CloudPlatform,
+   GenerateViewHierarchyXml
+ };
+diff --git a/detox/src/configuration/composeAppsConfig.js b/detox/src/configuration/composeAppsConfig.js
+index 93e354e26..44a177666 100644
+--- a/detox/src/configuration/composeAppsConfig.js
++++ b/detox/src/configuration/composeAppsConfig.js
+@@ -2,6 +2,8 @@
+ const _ = require('lodash');
+ const parse = require('yargs-parser');
+ 
++const logger = require('../../src/utils/logger').child({ cat: 'config' });
++
+ const deviceAppTypes = require('./utils/deviceAppTypes');
+ 
+ const CLI_PARSER_OPTIONS = {
+@@ -16,11 +18,14 @@ const CLI_PARSER_OPTIONS = {
+  * @param {Detox.DetoxDeviceConfig} opts.deviceConfig
+  * @param {Detox.DetoxConfiguration} opts.localConfig
+  * @param {*} opts.cliConfig
++ * @param {Boolean} opts.isCloudSession
+  * @returns {Record<string, Detox.DetoxAppConfig>}
+  */
+ function composeAppsConfig(opts) {
+   const appsConfig = composeAppsConfigFromAliased(opts);
+-  overrideAppLaunchArgs(appsConfig, opts.cliConfig);
++  if (!opts.isCloudSession) {
++    overrideAppLaunchArgs(appsConfig, opts.cliConfig);
++  }
+ 
+   return appsConfig;
+ }
+@@ -31,12 +36,13 @@ function composeAppsConfig(opts) {
+  * @param {Detox.DetoxDeviceConfig} opts.deviceConfig
+  * @param {Detox.DetoxConfig} opts.globalConfig
+  * @param {Detox.DetoxConfiguration} opts.localConfig
++ * @param {Boolean} opts.isCloudSession
+  * @returns {Record<string, Detox.DetoxAppConfig>}
+  */
+ function composeAppsConfigFromAliased(opts) {
+   /* @type {Record<string, Detox.DetoxAppConfig>} */
+   const result = {};
+-  const { configurationName, errorComposer, deviceConfig, globalConfig, localConfig } = opts;
++  const { configurationName, errorComposer, deviceConfig, globalConfig, localConfig, isCloudSession } = opts;
+ 
+   const isBuiltinDevice = Boolean(deviceAppTypes[deviceConfig.type]);
+   if (localConfig.app == null && localConfig.apps == null) {
+@@ -91,7 +97,8 @@ function composeAppsConfigFromAliased(opts) {
+       errorComposer,
+       deviceConfig,
+       appConfig,
+-      appPath
++      appPath,
++      isCloudSession
+     });
+ 
+     if (!result[appName]) {
+@@ -125,9 +132,10 @@ function overrideAppLaunchArgs(appsConfig, cliConfig) {
+   }
+ }
+ 
+-function validateAppConfig({ appConfig, appPath, deviceConfig, errorComposer }) {
++function validateAppConfig({ appConfig, appPath, deviceConfig, errorComposer, isCloudSession }) {
+   const deviceType = deviceConfig.type;
+   const allowedAppTypes = deviceAppTypes[deviceType];
++  const supportedCloudAppsConfig = ['type', 'app', 'appClient'];
+ 
+   if (allowedAppTypes && !allowedAppTypes.includes(appConfig.type)) {
+     throw errorComposer.invalidAppType({
+@@ -137,16 +145,31 @@ function validateAppConfig({ appConfig, appPath, deviceConfig, errorComposer })
+     });
+   }
+ 
+-  if (allowedAppTypes && !appConfig.binaryPath) {
+-    throw errorComposer.missingAppBinaryPath(appPath);
+-  }
++  if (appConfig.type !== 'android.cloud') {
++    if (allowedAppTypes && !appConfig.binaryPath) {
++      throw errorComposer.missingAppBinaryPath(appPath);
++    }
+ 
+-  if (appConfig.launchArgs && !_.isObject(appConfig.launchArgs)) {
+-    throw errorComposer.malformedAppLaunchArgs(appPath);
++    if (appConfig.launchArgs && !_.isObject(appConfig.launchArgs)) {
++      throw errorComposer.malformedAppLaunchArgs(appPath);
++    }
++
++    if (appConfig.type !== 'android.apk' && appConfig.reversePorts) {
++      throw errorComposer.unsupportedReversePorts(appPath);
++    }
+   }
++  else {
++    if (!_.isString(appConfig.app)) {
++      throw errorComposer.invalidCloudAppUrl(appPath);
++    }
+ 
+-  if (appConfig.type !== 'android.apk' && appConfig.reversePorts) {
+-    throw errorComposer.unsupportedReversePorts(appPath);
++    if (!_.isString(appConfig.appClient)) {
++      throw errorComposer.invalidCloudAppClientUrl(appPath);
++    }
++  }
++  const ignoredCloudConfigParams = _.difference(Object.keys(appConfig), supportedCloudAppsConfig);
++  if (isCloudSession && ignoredCloudConfigParams.length > 0 ) {
++    logger.warn(`[AppConfig] The properties ${ignoredCloudConfigParams.join(', ')} are not honoured for device type 'android.cloud'`); 
+   }
+ }
+ 
+diff --git a/detox/src/configuration/composeArtifactsConfig.js b/detox/src/configuration/composeArtifactsConfig.js
+index f7ddb0ce7..592f83adb 100644
+--- a/detox/src/configuration/composeArtifactsConfig.js
++++ b/detox/src/configuration/composeArtifactsConfig.js
+@@ -1,6 +1,7 @@
+ // @ts-nocheck
+ const _ = require('lodash');
+ 
++const logger = require('../../src/utils/logger').child({ cat: 'config' });
+ const InstrumentsArtifactPlugin = require('../artifacts/instruments/InstrumentsArtifactPlugin');
+ const LogArtifactPlugin = require('../artifacts/log/LogArtifactPlugin');
+ const ScreenshotArtifactPlugin = require('../artifacts/screenshot/ScreenshotArtifactPlugin');
+@@ -13,15 +14,17 @@ const VideoArtifactPlugin = require('../artifacts/video/VideoArtifactPlugin');
+  * @param {string} configurationName
+  * @param {Detox.DetoxConfig} globalConfig
+  * @param {Detox.DetoxConfiguration} localConfig
++ * @param {Boolean} isCloudSession
+  */
+ function composeArtifactsConfig({
+   cliConfig,
+   configurationName,
+   localConfig,
+   globalConfig,
++  isCloudSession
+ }) {
+   const artifactsConfig = _.defaultsDeep(
+-    extendArtifactsConfig({
++    !isCloudSession ? extendArtifactsConfig({
+       rootDir: cliConfig.artifactsLocation,
+       plugins: {
+         log: cliConfig.recordLogs,
+@@ -30,7 +33,7 @@ function composeArtifactsConfig({
+         instruments: cliConfig.recordPerformance,
+         uiHierarchy: cliConfig.captureViewHierarchy,
+       },
+-    }),
++    }) : {},
+     extendArtifactsConfig(localConfig.artifacts),
+     extendArtifactsConfig(globalConfig.artifacts),
+     extendArtifactsConfig(false),
+@@ -45,6 +48,9 @@ function composeArtifactsConfig({
+     artifactsConfig.rootDir
+   );
+ 
++  if (isCloudSession) {
++    validateCloudConfig(artifactsConfig);
++  }
+   return artifactsConfig;
+ }
+ 
+@@ -85,4 +91,33 @@ function ifString(value, mapper) {
+   return typeof value === 'string' ? mapper(value) : value;
+ }
+ 
++function validateCloudConfig(artifactsConfig) {
++  var plugins = artifactsConfig && artifactsConfig.plugins;
++  const cloudSupportedLogs = ['video', 'deviceLogs', 'networkLogs'];
++  const cloudSupportedCaps = ['plugins'];
++  plugins = cloudSupportedLogs.reduce((accumulator, plugin) => {
++    const defaultEnabled = plugin == 'video' ? true : false;
++    if (typeof accumulator[plugin] === 'object' && Object.keys(accumulator[plugin]).length > 1) {
++      logger.warn(`[ArtifactsConfig] Only the all and none presets are honoured in the ${plugin} plugin for device type 'android.cloud' and default is enabled:${defaultEnabled}.`);
++    }
++    const enabled = _.get(accumulator, `${plugin}.enabled`);
++    if (accumulator[plugin] && enabled) {
++        accumulator[plugin] = {
++            'enabled': enabled
++        };
++    }
++    else {
++        accumulator[plugin] = {
++            'enabled': defaultEnabled
++        };
++    }
++    return accumulator;
++  }, plugins);
++  let ignoredCloudConfigParams = _.difference(Object.keys(artifactsConfig), cloudSupportedCaps);
++  ignoredCloudConfigParams = ignoredCloudConfigParams.concat(_.difference(Object.keys(plugins), cloudSupportedLogs));
++  if (ignoredCloudConfigParams.length > 0)
++    logger.warn(`[ArtifactsConfig] The properties ${ignoredCloudConfigParams} are not honoured for device type 'android.cloud'.`);
++  // Should we delete the ignored properties also?
++}
++
+ module.exports = composeArtifactsConfig;
+diff --git a/detox/src/configuration/composeBehaviorConfig.js b/detox/src/configuration/composeBehaviorConfig.js
+index 620dfb775..280ad992a 100644
+--- a/detox/src/configuration/composeBehaviorConfig.js
++++ b/detox/src/configuration/composeBehaviorConfig.js
+@@ -1,16 +1,24 @@
+ // @ts-nocheck
+ const _ = require('lodash');
+ 
++const logger = require('../../src/utils/logger').child({ cat: 'config' });
++
+ /**
+  * @param {*} cliConfig
+  * @param {Detox.DetoxConfig} globalConfig
+  * @param {Detox.DetoxConfiguration} localConfig
++ * @param {Boolean} isCloudSession
+  */
+ function composeBehaviorConfig({
+   cliConfig,
+   globalConfig,
+   localConfig,
++  isCloudSession
+ }) {
++  if (isCloudSession) {
++    cliConfig.reuse = true;
++    logger.warn(`[BehaviorConfig] The 'Behaviour' config section is not supported for device type android.cloud and will be ignored.`);
++  }
+   return _.chain({})
+     .defaultsDeep(
+       {
+@@ -19,8 +27,9 @@ function composeBehaviorConfig({
+           reinstallApp: cliConfig.reuse ? false : undefined,
+         },
+         cleanup: {
+-          shutdownDevice: cliConfig.cleanup ? true : undefined,
++          shutdownDevice: isCloudSession ? false : cliConfig.cleanup ? true : undefined
+         },
++        launchApp: isCloudSession ? 'auto' : undefined
+       },
+       localConfig.behavior,
+       globalConfig.behavior,
+diff --git a/detox/src/configuration/composeDeviceConfig.js b/detox/src/configuration/composeDeviceConfig.js
+index aa0d9151b..73417fb8f 100644
+--- a/detox/src/configuration/composeDeviceConfig.js
++++ b/detox/src/configuration/composeDeviceConfig.js
+@@ -13,8 +13,10 @@ const log = require('../utils/logger').child({ cat: 'config' });
+  */
+ function composeDeviceConfig(opts) {
+   const deviceConfig = composeDeviceConfigFromAliased(opts);
+-  applyCLIOverrides(deviceConfig, opts.cliConfig);
+-  deviceConfig.device = unpackDeviceQuery(deviceConfig);
++  if (deviceConfig.type !== 'android.cloud') {
++    applyCLIOverrides(deviceConfig, opts.cliConfig);
++    deviceConfig.device = unpackDeviceQuery(deviceConfig);
++  }
+ 
+   return deviceConfig;
+ }
+@@ -72,7 +74,7 @@ function validateDeviceConfig({ deviceConfig, errorComposer, deviceAlias }) {
+ 
+   const maybeError = _.attempt(() => environmentFactory.validateConfig(deviceConfig));
+   if (_.isError(maybeError)) {
+-      throw errorComposer.invalidDeviceType(deviceAlias, deviceConfig, maybeError);
++    throw errorComposer.invalidDeviceType(deviceAlias, deviceConfig, maybeError);
+   }
+ 
+   if (!KNOWN_TYPES.has(deviceConfig.type)) {
+@@ -156,6 +158,22 @@ function validateDeviceConfig({ deviceConfig, errorComposer, deviceAlias }) {
+       if (_.isEmpty(minimalShape)) {
+         throw errorComposer.missingDeviceMatcherProperties(deviceAlias, expectedProperties);
+       }
++
++      if (deviceConfig.type === 'android.cloud' && !_.isEmpty(minimalShape) && _.difference(expectedProperties, Object.keys(deviceConfig.device)).length !== 0) {
++        throw errorComposer.invalidDeviceMatcherProperties(deviceAlias, expectedProperties);
++      }
++    }
++  }
++  if (deviceConfig.type == 'android.cloud') {
++    const expectedProperties = EXPECTED_DEVICE_MATCHER_PROPS[deviceConfig.type];
++    if (!_.isObject(deviceConfig.device)) {
++      throw errorComposer.invalidDeviceMatcherProperties(deviceAlias, expectedProperties);
++    }
++    const cloudSupportedCaps = ['type', 'device'];
++    let ignoredCloudConfigParams = _.difference(Object.keys(deviceConfig), cloudSupportedCaps);
++    ignoredCloudConfigParams = ignoredCloudConfigParams.concat(_.difference(Object.keys(deviceConfig.device), EXPECTED_DEVICE_MATCHER_PROPS['android.cloud']));
++    if (ignoredCloudConfigParams.length > 0) {
++      log.warn(`[DeviceConfig] The properties ${ignoredCloudConfigParams.join(', ')} are not honoured for device type 'android.cloud'.`);
+     }
+   }
+ }
+@@ -232,6 +250,7 @@ const EXPECTED_DEVICE_MATCHER_PROPS = {
+   'android.attached': ['adbName'],
+   'android.emulator': ['avdName'],
+   'android.genycloud': ['recipeUUID', 'recipeName'],
++  'android.cloud': ['name', 'osVersion']
+ };
+ 
+ const KNOWN_TYPES = new Set(Object.keys(EXPECTED_DEVICE_MATCHER_PROPS));
+diff --git a/detox/src/configuration/composeSessionConfig.js b/detox/src/configuration/composeSessionConfig.js
+index f8b94aa2b..97c5b8e8c 100644
+--- a/detox/src/configuration/composeSessionConfig.js
++++ b/detox/src/configuration/composeSessionConfig.js
+@@ -1,4 +1,7 @@
++const _ = require('lodash');
++
+ const isValidWebsocketURL = require('../utils/isValidWebsocketURL');
++const log = require('../utils/logger').child({ cat: 'config' });
+ 
+ /**
+  * @param {{
+@@ -6,11 +9,12 @@ const isValidWebsocketURL = require('../utils/isValidWebsocketURL');
+  *  globalConfig: Detox.DetoxConfig;
+  *  localConfig: Detox.DetoxConfiguration;
+  *  errorComposer: import('../errors/DetoxConfigErrorComposer');
++ *  isCloudSession: Boolean
+  * }} options
+  */
+ async function composeSessionConfig(options) {
+-  const { errorComposer, cliConfig, globalConfig, localConfig } = options;
+-
++  const { errorComposer, cliConfig, globalConfig, localConfig, isCloudSession } = options;
++  const cloudSupportedCaps = ['server', 'name', 'project', 'build', 'local', 'forceLocal', 'localIdentifier', 'networkLogsIncludeHosts', 'networkLogsExcludeHosts'];
+   const session = {
+     ...globalConfig.session,
+     ...localConfig.session,
+@@ -22,6 +26,9 @@ async function composeSessionConfig(options) {
+       throw errorComposer.invalidServerProperty();
+     }
+   }
++  else if (isCloudSession) {
++    throw errorComposer.invalidSessionProperty('server');
++  }
+ 
+   if (session.sessionId != null) {
+     const value = session.sessionId;
+@@ -41,12 +48,67 @@ async function composeSessionConfig(options) {
+     session.debugSynchronization = +cliConfig.debugSynchronization;
+   }
+ 
++  if (isCloudSession) {
++    if (session.build != null) {
++      const value = session.build;
++      if (typeof value !== 'string') {
++        throw errorComposer.invalidCloudSessionProperty('build');
++      }
++    }
++    if (session.project != null) {
++      const value = session.project;
++      if (typeof value !== 'string') {
++        throw errorComposer.invalidCloudSessionProperty('project');
++      }
++    }
++    if (session.name != null) {
++      const value = session.name;
++      if (typeof value !== 'string') {
++        throw errorComposer.invalidCloudSessionProperty('name');
++      }
++    }
++    if (session.local != null) {
++      const value = session.local;
++      if (typeof value !== 'boolean') {
++        throw errorComposer.invalidCloudSessionProperty('local', 'boolean');
++      }
++    }
++    if (session.forceLocal != null) {
++      const value = session.forceLocal;
++      if (typeof value !== 'boolean') {
++        throw errorComposer.invalidCloudSessionProperty('forceLocal', 'boolean');
++      }
++    }
++    if (session.localIdentifier != null) {
++      const value = session.localIdentifier;
++      if (typeof value !== 'string' || value.length === 0) {
++        throw errorComposer.invalidCloudSessionProperty('localIdentifier');
++      }
++    }
++    if (session.networkLogsIncludeHosts != null) {
++      const value = session.networkLogsIncludeHosts;
++      if (!isValidNetworkHostsInput(value)) {
++        throw errorComposer.invalidCloudSessionProperty('networkLogsIncludeHosts', 'string or array of non-empty strings');
++      }
++    }
++    if (session.networkLogsExcludeHosts != null) {
++      const value = session.networkLogsExcludeHosts;
++      if (!isValidNetworkHostsInput(value)) {
++        throw errorComposer.invalidCloudSessionProperty('networkLogsExcludeHosts', 'string or array of non-empty strings');
++      }
++    }
++    const ignoredCloudConfigParams = _.difference(Object.keys(session), cloudSupportedCaps);
++    if (ignoredCloudConfigParams.length > 0)
++      log.warn(`[SessionConfig] The properties ${ignoredCloudConfigParams.join(', ')} are not honoured for device type 'android.cloud'.`);
++  }
++
+   const result = {
+     autoStart: !session.server,
+     debugSynchronization: 10000,
+ 
+     ...session,
+   };
++  // Are we supporting or ignoring debugSynchronization
+ 
+   if (!result.server && !result.autoStart) {
+     throw errorComposer.cannotSkipAutostartWithMissingServer();
+@@ -55,4 +117,14 @@ async function composeSessionConfig(options) {
+   return result;
+ }
+ 
++function isValidNetworkHostsInput(value) {
++  if (typeof value === 'string') {
++    return value.length > 0;
++  }
++  if (Array.isArray(value)) {
++    return value.length > 0 && value.every(host => typeof host === 'string' && host.length > 0);
++  }
++  return false;
++}
++
+ module.exports = composeSessionConfig;
+diff --git a/detox/src/configuration/index.js b/detox/src/configuration/index.js
+index 31701eeb2..70dd32754 100644
+--- a/detox/src/configuration/index.js
++++ b/detox/src/configuration/index.js
+@@ -1,6 +1,7 @@
+ // @ts-nocheck
+ const _ = require('lodash');
+ 
++const package_json = require('../../package.json');
+ const DetoxConfigErrorComposer = require('../errors/DetoxConfigErrorComposer');
+ 
+ const collectCliConfig = require('./collectCliConfig');
+@@ -14,6 +15,7 @@ const composeRunnerConfig = require('./composeRunnerConfig');
+ const composeSessionConfig = require('./composeSessionConfig');
+ const loadExternalConfig = require('./loadExternalConfig');
+ const selectConfiguration = require('./selectConfiguration');
++const validateCloudAuthConfig = require('./validateCloudAuthConfig');
+ 
+ async function composeDetoxConfig({
+   cwd = process.cwd(),
+@@ -70,6 +72,8 @@ async function composeDetoxConfig({
+     cliConfig,
+   });
+ 
++  const isCloudSession = deviceConfig.type === 'android.cloud';
++
+   const appsConfig = composeAppsConfig({
+     errorComposer,
+     configurationName,
+@@ -77,6 +81,7 @@ async function composeDetoxConfig({
+     globalConfig,
+     localConfig,
+     cliConfig,
++    isCloudSession
+   });
+ 
+   const artifactsConfig = composeArtifactsConfig({
+@@ -84,12 +89,14 @@ async function composeDetoxConfig({
+     globalConfig,
+     localConfig,
+     cliConfig,
++    isCloudSession
+   });
+ 
+   const behaviorConfig = composeBehaviorConfig({
+     globalConfig,
+     localConfig,
+     cliConfig,
++    isCloudSession
+   });
+ 
+   const loggerConfig = composeLoggerConfig({
+@@ -103,8 +110,38 @@ async function composeDetoxConfig({
+     globalConfig,
+     localConfig,
+     cliConfig,
++    isCloudSession
++  });
++
++  const cloudAuthenticationConfig = await validateCloudAuthConfig({
++    errorComposer,
++    localConfig,
++    isCloudSession
+   });
+ 
++  if (isCloudSession) {
++    const query_param = {
++      'device': _.get(deviceConfig, 'device.name'),
++      'osVersion': _.get(deviceConfig, 'device.osVersion'),
++      'name': _.get(sessionConfig, 'name'),
++      'project': _.get(sessionConfig, 'project'),
++      'build': _.get(sessionConfig, 'build'),
++      'clientDetoxVersion': package_json.version,
++      'app': _.get(appsConfig, 'default.app'),
++      'appClient': _.get(appsConfig, 'default.appClient'),
++      'username': _.get(cloudAuthenticationConfig, 'username'),
++      'accessKey': _.get(cloudAuthenticationConfig, 'accessKey'),
++      'networkLogs': _.get(artifactsConfig, 'plugins.networkLogs.enabled'),
++      'deviceLogs': _.get(artifactsConfig, 'plugins.deviceLogs.enabled'),
++      'video': _.get(artifactsConfig, 'plugins.video.enabled'),
++      'local': _.get(sessionConfig, 'local'),
++      'forceLocal': _.get(sessionConfig, 'forceLocal'),
++      'localIdentifier': _.get(sessionConfig, 'localIdentifier'),
++      'networkLogsIncludeHosts': _.get(sessionConfig, 'networkLogsIncludeHosts'),
++      'networkLogsExcludeHosts': _.get(sessionConfig, 'networkLogsExcludeHosts')
++    };
++    sessionConfig.server += `?caps=${encodeURIComponent(JSON.stringify(query_param))}`;
++  }
+   const commandsConfig = composeCommandsConfig({
+     appsConfig,
+     localConfig,
+@@ -122,6 +159,7 @@ async function composeDetoxConfig({
+     logger: loggerConfig,
+     testRunner: runnerConfig,
+     session: sessionConfig,
++    cloudAuthenticationConfig
+   };
+ 
+   Object.defineProperty(result, 'errorComposer', {
+diff --git a/detox/src/configuration/utils/deviceAppTypes.js b/detox/src/configuration/utils/deviceAppTypes.js
+index 79459f042..ec0c492dc 100644
+--- a/detox/src/configuration/utils/deviceAppTypes.js
++++ b/detox/src/configuration/utils/deviceAppTypes.js
+@@ -3,4 +3,5 @@ module.exports = {
+   'android.attached': ['android.apk'],
+   'android.emulator': ['android.apk'],
+   'android.genycloud': ['android.apk'],
++  'android.cloud': ['android.cloud']
+ };
+diff --git a/detox/src/configuration/validateCloudAuthConfig.js b/detox/src/configuration/validateCloudAuthConfig.js
+new file mode 100644
+index 000000000..094200700
+--- /dev/null
++++ b/detox/src/configuration/validateCloudAuthConfig.js
+@@ -0,0 +1,36 @@
++const _ = require('lodash');
++
++const log = require('../utils/logger').child({ cat: 'config' });
++/**
++ * @param {{
++ *  localConfig: Detox.DetoxConfiguration;
++ *  errorComposer: import('../errors/DetoxConfigErrorComposer');
++ *  isCloudSession: Boolean
++ * }} options
++ */
++async function validateCloudAuthConfig(options) {
++    const { errorComposer, localConfig, isCloudSession } = options;
++
++    const cloudAuthentication = {
++        ...localConfig.cloudAuthentication
++    };
++    if (!isCloudSession) {
++        return cloudAuthentication;
++    }
++    if (!_.isString(cloudAuthentication.username)) {
++        throw errorComposer.invalidCloudAuthProperty('username');
++    }
++
++    if (!_.isString(cloudAuthentication.accessKey)) {
++        throw errorComposer.invalidCloudAuthProperty('accessKey');
++    }
++
++    const cloudSupportedCaps = ['username', 'accessKey'];
++    const ignoredCloudConfigParams = _.difference(Object.keys(cloudAuthentication), cloudSupportedCaps);
++    if (ignoredCloudConfigParams.length > 0)
++        log.warn(`[CloudAuthenticationConfig] The properties ${ignoredCloudConfigParams.join(', ')} are not honoured for device type 'android.cloud'.`);
++
++    return cloudAuthentication;
++}
++
++module.exports = validateCloudAuthConfig;
+diff --git a/detox/src/devices/allocation/drivers/android/cloud/CloudAndroidAllocDriver.js b/detox/src/devices/allocation/drivers/android/cloud/CloudAndroidAllocDriver.js
+new file mode 100644
+index 000000000..6e1ec6433
+--- /dev/null
++++ b/detox/src/devices/allocation/drivers/android/cloud/CloudAndroidAllocDriver.js
+@@ -0,0 +1,43 @@
++/**
++ * @typedef {import('../../AllocationDriverBase').AllocationDriverBase} AllocationDriverBase
++ * @typedef {import('../../../../common/drivers/android/cookies').AndroidDeviceCookie} AndroidDeviceCookie
++ */
++
++/**
++ * @implements {AllocationDriverBase}
++ */
++class CloudAndroidAllocDriver {
++    constructor() {
++        this._idlePromise = Promise.resolve();
++    }
++
++    async init() {
++        return this._idlePromise;
++    }
++
++    /**
++     * @param deviceConfig
++     * @return {Promise<AndroidDeviceCookie>}
++     */
++    async allocate(deviceConfig) {
++      return { id: null, adbName:null };
++    }
++
++    /**
++     * @param {AndroidDeviceCookie} deviceCookie
++     * @returns {Promise<void>}
++     */
++    async postAllocate(deviceCookie) {
++        return this._idlePromise
++    }
++
++    /**
++     * @param cookie { AndroidDeviceCookie }
++     * @return {Promise<void>}
++     */
++    async free(cookie) {
++      return this._idlePromise
++    }
++  }
++
++  module.exports = CloudAndroidAllocDriver;
+diff --git a/detox/src/devices/allocation/factories/cloud.js b/detox/src/devices/allocation/factories/cloud.js
+new file mode 100644
+index 000000000..9c47b6a8d
+--- /dev/null
++++ b/detox/src/devices/allocation/factories/cloud.js
+@@ -0,0 +1,13 @@
++// @ts-nocheck
++const DeviceAllocatorFactory = require('./base');
++const CloudAndroidAllocDriver = require('../drivers/android/cloud/CloudAndroidAllocDriver');
++
++class Noop extends DeviceAllocatorFactory {
++    _createDriver() {
++      return new CloudAndroidAllocDriver();
++    }
++}
++  
++module.exports = {
++  Noop
++};
+\ No newline at end of file
+diff --git a/detox/src/devices/allocation/factories/index.js b/detox/src/devices/allocation/factories/index.js
+index 81fc33499..b6952a78c 100644
+--- a/detox/src/devices/allocation/factories/index.js
++++ b/detox/src/devices/allocation/factories/index.js
+@@ -2,4 +2,5 @@ module.exports = {
+   ...require('./android'),
+   ...require('./ios'),
+   ...require('./external'),
++  ...require('./cloud')
+ };
+diff --git a/detox/src/devices/runtime/drivers/android/cloud/cloudAndroidDriver.js b/detox/src/devices/runtime/drivers/android/cloud/cloudAndroidDriver.js
+new file mode 100644
+index 000000000..6083fd479
+--- /dev/null
++++ b/detox/src/devices/runtime/drivers/android/cloud/cloudAndroidDriver.js
+@@ -0,0 +1,151 @@
++/* eslint @typescript-eslint/no-unused-vars: ["error", { "args": "none" }] */
++// @ts-nocheck
++const _ = require('lodash');
++
++const DetoxApi = require('../../../../../android/espressoapi/Detox');
++const EspressoDetoxApi = require('../../../../../android/espressoapi/EspressoDetox');
++const UiDeviceProxy = require('../../../../../android/espressoapi/UiDeviceProxy');
++const logger = require('../../../../../utils/logger');
++const DeviceDriverBase = require('../../DeviceDriverBase');
++
++const log = logger.child({ cat: 'device' });
++
++/**
++ * @typedef { DeviceDriverDeps } CloudAndroidDriverDeps
++ * @property invocationManager { InvocationManager }
++ */
++
++class CloudAndroidDriver extends DeviceDriverBase {
++  /**
++   * @param deps { CloudAndroidDriverDeps }
++   * @param props { CloudAndroidDriverProps }
++   */
++  constructor(deps) {
++    super(deps);
++
++    this.invocationManager = deps.invocationManager;
++    this.instrumentation = false;
++
++    this.uiDevice = new UiDeviceProxy(this.invocationManager).getUIDevice();
++  }
++
++  async launchApp(bundleId, launchArgs, languageAndLocale) {
++    return await this._handleLaunchApp({
++      manually: false,
++      bundleId,
++      launchArgs,
++      languageAndLocale,
++    });
++  }
++
++  async _handleLaunchApp({ manually, bundleId, launchArgs }) {
++    const response = await this._launchApp( bundleId, launchArgs);
++    const pid = _.get(response, 'response.success');
++    return pid;
++  }
++
++  async deliverPayload(params) {
++    if (params.delayPayload) {
++      return;
++    }
++
++    const { url } = params;
++    if (url) {
++      await this._startActivityWithUrl(url);
++    }
++  }
++
++  async waitUntilReady() {
++    try {
++      await super.waitUntilReady();
++    } catch (e) {
++      log.warn({ error: e }, 'An error occurred while waiting for the app to become ready. Waiting for disconnection...');
++      await this.client.waitUntilDisconnected();
++      log.warn('The app disconnected.');
++      throw e;
++    }
++  }
++
++  async pressBack() {
++    await this.uiDevice.pressBack();
++  }
++
++  async sendToHome(params) {
++    await this.uiDevice.pressHome();
++  }
++
++  async terminate(bundleId) {
++    return await this._terminateInstrumentation();
++  }
++
++  async cleanup(bundleId) {
++    await super.cleanup(bundleId);
++  }
++
++  getPlatform() {
++    return 'android';
++  }
++
++  getUiDevice() {
++    return this.uiDevice;
++  }
++
++  async enableSynchronization() {
++    await this.invocationManager.execute(EspressoDetoxApi.setSynchronization(true));
++  }
++
++  async disableSynchronization() {
++    await this.invocationManager.execute(EspressoDetoxApi.setSynchronization(false));
++  }
++
++  async takeScreenshot(screenshotName) {
++
++    return '';
++  }
++
++  async setOrientation(orientation) {
++    const orientationMapping = {
++      landscape: 1, // top at left side landscape
++      portrait: 0 // non-reversed portrait.
++    };
++
++    const call = EspressoDetoxApi.changeOrientation(orientationMapping[orientation]);
++    await this.invocationManager.execute(call);
++  }
++
++  async _launchApp( bundleId, launchArgs) {
++    if (!this.instrumentation) {
++      const response = await this.invocationManager.executeCloudPlatform({
++        'method': 'launchApp',
++        'args': {
++          'launchArgs': launchArgs
++        }
++      });
++      const status = _.get(response, 'response.success');
++      this.instrumentation = status && status.toString() == 'true';
++    } else if (launchArgs.detoxURLOverride) {
++      await this._startActivityWithUrl(launchArgs.detoxURLOverride);
++    } else {
++      await this._resumeMainActivity();
++    }
++  }
++
++  async _terminateInstrumentation(bundleId) {
++    const response = await this.invocationManager.executeCloudPlatform({
++      'method': 'terminateApp',
++      'args': {}
++    });
++    const status = _.get(response, 'response.success');
++    this.instrumentation = !(status && status.toString() == 'true');
++  }
++
++  _startActivityWithUrl(url) {
++    return this.invocationManager.execute(DetoxApi.startActivityFromUrl(url));
++  }
++
++  _resumeMainActivity() {
++    return this.invocationManager.execute(DetoxApi.launchMainActivity());
++  }
++}
++
++module.exports = CloudAndroidDriver;
+diff --git a/detox/src/devices/runtime/factories/android.js b/detox/src/devices/runtime/factories/android.js
+index cee58963f..c767d86fa 100644
+--- a/detox/src/devices/runtime/factories/android.js
++++ b/detox/src/devices/runtime/factories/android.js
+@@ -55,8 +55,19 @@ class Genycloud extends RuntimeDriverFactoryAndroid {
+   }
+ }
+ 
++class Noop extends RuntimeDriverFactoryAndroid {
++  _createDriver(deviceCookie, deps, configs) {
++    const props = {
++      adbName: undefined,
++    };
++    const CloudAndroidDriver  = require('../drivers/android/cloud/cloudAndroidDriver');
++    return new CloudAndroidDriver(deps, props);
++  }
++}
++
+ module.exports = {
+   AndroidEmulator,
+   AndroidAttached,
+   Genycloud,
++  Noop
+ };
+diff --git a/detox/src/environmentFactory.js b/detox/src/environmentFactory.js
+index 9e04e193b..f496e3409 100644
+--- a/detox/src/environmentFactory.js
++++ b/detox/src/environmentFactory.js
+@@ -75,6 +75,14 @@ function _getFactoryClasses(deviceConfig) {
+       matchersFactoryClass = matchersFactories.Ios;
+       runtimeDeviceFactoryClass = runtimeDeviceFactories.IosSimulator;
+       break;
++    
++    case 'android.cloud':
++      envValidatorFactoryClass = envValidationFactories.Noop;
++      deviceAllocatorFactoryClass = deviceAllocationFactories.Noop;
++      artifactsManagerFactoryClass = artifactsManagerFactories.Noop;
++      matchersFactoryClass = matchersFactories.Android;
++      runtimeDeviceFactoryClass = runtimeDeviceFactories.Noop;
++      break;
+ 
+     default: {
+       return null;
+diff --git a/detox/src/errors/DetoxConfigErrorComposer.js b/detox/src/errors/DetoxConfigErrorComposer.js
+index 52968639b..8872b2e46 100644
+--- a/detox/src/errors/DetoxConfigErrorComposer.js
++++ b/detox/src/errors/DetoxConfigErrorComposer.js
+@@ -434,6 +434,23 @@ Check that in your Detox config${this._atPath()}`,
+     });
+   }
+ 
++  invalidDeviceMatcherProperties(deviceAlias, expectedProperties) {
++    const { type } = this._resolveSelectedDeviceConfig(deviceAlias);
++    return new DetoxConfigError({
++      message: `Invalid "device" matcher inside the device config.`,
++      hint: `It should strictly match the device query shown below:\n
++{
++  "type": ${J(type)},
++  "device": {
++    ${expectedProperties.map(p => `${J(p)}: ... `).join(',\n    ')}
++  }
++}
++Check that in your Detox config${this._atPath()}`,
++      debugInfo: this._focusOnDeviceConfig(deviceAlias),
++      inspectOptions: { depth: 4 },
++    });
++  }
++
+   // endregion
+ 
+   // region composeAppsConfig
+@@ -535,6 +552,22 @@ You have a few options:
+     });
+   }
+ 
++  invalidCloudAppUrl( appPath ) {
++    return new DetoxConfigError({
++      message: `Invalid "app" property in the app config.\nExpected a string:.`,
++      debugInfo: this._focusOnAppConfig(appPath, this._ensureProperty('app')),
++      inspectOptions: { depth: 4 },
++    });
++  }
++
++  invalidCloudAppClientUrl( appPath ) {
++    return new DetoxConfigError({
++      message: `Invalid "appClient" property in the app config.\nExpected a string:.`,
++      debugInfo: this._focusOnAppConfig(appPath, this._ensureProperty('appClient')),
++      inspectOptions: { depth: 4 },
++    });
++  }
++
+   duplicateAppConfig({ appName, appPath, preExistingAppPath }) {
+     const config1 = { ..._.get(this.contents, preExistingAppPath) };
+     config1.name = config1.name || '<GIVE IT A NAME>';
+@@ -639,6 +672,18 @@ Examine your Detox config${this._atPath()}`,
+     });
+   }
+ 
++  invalidSessionProperty(property) {
++    return new DetoxConfigError({
++      message: `session.${property} property is mandatory`,
++      hint: `Expected something like "ws://localhost:8099".\nCheck that in your Detox config${this._atPath()}`,
++      inspectOptions: { depth: 3 },
++      debugInfo: _.omitBy({
++        session: _.get(this.contents, ['session']),
++        ...this._focusOnConfiguration(c => _.pick(c, ['session'])),
++      }, _.isEmpty),
++    });
++  }
++
+   invalidSessionIdProperty() {
+     return new DetoxConfigError({
+       message: `session.sessionId property should be a non-empty string`,
+@@ -651,6 +696,30 @@ Examine your Detox config${this._atPath()}`,
+     });
+   }
+ 
++  invalidCloudSessionProperty( capability, type='string' ) {
++    return new DetoxConfigError({
++      message: `session.${capability} property is not a valid ${type}`,
++      hint: `Check that in your Detox config${this._atPath()}`,
++      inspectOptions: { depth: 3 },
++      debugInfo: _.omitBy({
++        session: _.get(this.contents, ['session']),
++        ...this._focusOnConfiguration(c => _.pick(c, ['session'])),
++      }, _.isEmpty),
++    });
++  }
++
++  invalidCloudAuthProperty( capability ) {
++    return new DetoxConfigError({
++      message: `cloudAuthentication.${capability} property is not valid`,
++      hint: `Check that in your Detox config${this._atPath()}`,
++      inspectOptions: { depth: 3 },
++      debugInfo: _.omitBy({
++        cloudAuthentication: _.get(this.contents, ['cloudAuthentication']),
++        ...this._focusOnConfiguration(c => _.pick(c, ['cloudAuthentication'])),
++      }, _.isEmpty),
++    });
++  }
++
+   invalidDebugSynchronizationProperty() {
+     return new DetoxConfigError({
+       message: `session.debugSynchronization should be a positive number`,
+diff --git a/detox/src/invoke.js b/detox/src/invoke.js
+index dcf3a26ca..121518004 100644
+--- a/detox/src/invoke.js
++++ b/detox/src/invoke.js
+@@ -10,6 +10,10 @@ class InvocationManager {
+   async execute(invocation) {
+    return await this.executionHandler.execute(invocation);
+   }
++
++  async executeCloudPlatform(invocation) {
++    return await this.executionHandler.waitForCloudPlatform(invocation);
++  }
+ }
+ 
+ module.exports = {
+diff --git a/examples/demo-react-native/android/app/src/androidTest/AndroidManifest.xml b/examples/demo-react-native/android/app/src/androidTest/AndroidManifest.xml
+new file mode 100644
+index 000000000..fa52039bc
+--- /dev/null
++++ b/examples/demo-react-native/android/app/src/androidTest/AndroidManifest.xml
+@@ -0,0 +1,20 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.example.test">
++
++    <application>
++        <activity
++            android:name="androidx.test.core.app.InstrumentationActivityInvoker$EmptyFloatingActivity"
++            android:exported="true">
++        </activity>
++        <activity
++            android:name="androidx.test.core.app.InstrumentationActivityInvoker$BootstrapActivity"
++            android:exported="true">
++        </activity>
++        <activity
++            android:name="androidx.test.core.app.InstrumentationActivityInvoker$EmptyActivity"
++            android:exported="true">
++        </activity>
++    </application>
++
++</manifest>
+\ No newline at end of file
+diff --git a/examples/demo-react-native/android/app/src/main/res/xml/network_security_config.xml b/examples/demo-react-native/android/app/src/main/res/xml/network_security_config.xml
+index bb6eec9d7..3a0fc8d9e 100644
+--- a/examples/demo-react-native/android/app/src/main/res/xml/network_security_config.xml
++++ b/examples/demo-react-native/android/app/src/main/res/xml/network_security_config.xml
+@@ -4,5 +4,6 @@
+         <domain includeSubdomains="true">10.0.2.2</domain>
+         <domain includeSubdomains="true">10.0.3.2</domain>
+         <domain includeSubdomains="true">localhost</domain>
++        <domain includeSubdomains="true">127.0.0.1</domain>
+     </domain-config>
+ </network-security-config>
+diff --git a/examples/demo-react-native/package.json b/examples/demo-react-native/package.json
+index 546e32c4b..2b4cafa07 100644
+--- a/examples/demo-react-native/package.json
++++ b/examples/demo-react-native/package.json
+@@ -4,7 +4,6 @@
+   "private": true,
+   "scripts": {
+     "start": "react-native start",
+-    "postinstall": "node scripts/postinstall.js",
+     "bloat-bundle": "node scripts/bloatBundle.mjs",
+     "build:ios": "detox build --configuration ios.sim.debug",
+     "build:ios-debug": "detox build --configuration ios.sim.debug",
+@@ -18,7 +17,6 @@
+     "test:android-release": "detox test --configuration android.emu.release",
+     "e2e:ios": "npm run build:ios-release && npm run test:ios-release",
+     "e2e:android": "npm run build:android-release && npm run test:android-release",
+-    "podInstall:ios": "cd ios && bundle exec pod install",
+     "clean:android": "pushd android && ./gradlew clean && popd"
+   },
+   "dependencies": {
