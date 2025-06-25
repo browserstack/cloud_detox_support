@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/wix/Detox/issues"
   },
-  "homepage": "https://github.com/wix/Detox#readme",
+  "homepage": "https://www.browserstack.com/docs/app-automate/detox/getting-started",
   "main": "./index.js",
   "types": "./index.d.ts",
   "author": "Tal Kol <talkol@gmail.com>",
