@@ -1,5 +1,5 @@
 {
-  "name": "@avinashbharti97/detox",
+  "name": "@browserstack/detox",
   "description": "E2E tests and automation for mobile",
   "version": "20.38.0",
   "bin": {
