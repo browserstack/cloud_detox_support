@@ -34,7 +34,7 @@ index 3973b176e..b9a42e1da 100644
 @@ -1,5 +1,5 @@
  {
 -  "name": "detox",
-+  "name": "@avinashbharti97/detox",
++  "name": "@browserstack/detox",
    "description": "E2E tests and automation for mobile",
    "version": "20.26.2",
    "bin": {
@@ -43,7 +43,7 @@ index 3973b176e..b9a42e1da 100644
    "repository": {
      "type": "git",
 -    "url": "https://github.com/wix/Detox.git"
-+    "url": "https://github.com/browserstack/cloud_detox_support.git"
++    "url": "https://www.browserstack.com/docs/app-automate/detox/getting-started"
    },
    "nativePackage": true,
    "bugs": {

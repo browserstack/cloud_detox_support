@@ -1,0 +1,71 @@
+if ENV['RCT_NEW_ARCH_ENABLED'] == '1'
+  puts 'React Native new arch enabled (RCT_NEW_ARCH_ENABLED = 1)'
+end
+
+def node_require(script)
+  # Resolve script with node to allow for hoisting
+  require Pod::Executable.execute_command('node', ['-p',
+    "require.resolve(
+      '#{script}',
+      {paths: [process.argv[1]]},
+    )", __dir__]).strip
+end
+
+node_require('react-native/scripts/react_native_pods.rb')
+node_require('react-native-permissions/scripts/setup.rb')
+
+platform :ios, min_ios_version_supported
+
+install! 'cocoapods', :deterministic_uuids => false
+
+# Comment unwanted permissions
+setup_permissions([
+  'AppTrackingTransparency',
+  'Bluetooth',
+  'Calendars',
+  'Camera',
+  'Contacts',
+  'FaceID',
+  'LocationAccuracy',
+  'LocationAlways',
+  'LocationWhenInUse',
+  'MediaLibrary',
+  'Microphone',
+  'Motion',
+  'Notifications',
+  'PhotoLibrary',
+  'PhotoLibraryAddOnly',
+  'Reminders',
+  'Siri',
+  'SpeechRecognition',
+  'StoreKit',
+])
+
+def shared_pods
+    config = use_native_modules!
+
+    use_react_native!(
+      :path => config[:reactNativePath],
+      :app_path => "#{Pod::Config.instance.installation_root}/.."
+    )
+
+    # Shared pods
+    pod 'react-native-slider', :path => '../node_modules/@react-native-community/slider'
+end
+
+target 'example' do
+  shared_pods
+end
+
+target 'example-ci' do
+  shared_pods
+end
+
+post_install do |installer|
+  config = use_native_modules!
+  react_native_post_install(
+    installer,
+    config[:reactNativePath],
+    :mac_catalyst_enabled => false
+  )
+end
