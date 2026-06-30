@@ -1,5 +1,5 @@
 {
-  "name": "detox",
+  "name": "@avinashbharti97/detox",
   "description": "E2E tests and automation for mobile",
   "version": "20.51.3-smoke.0",
   "bin": "local-cli/cli.js",
@@ -24,7 +24,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/wix/Detox.git"
+    "url": "https://github.com/browserstack/cloud_detox_support.git"
   },
   "nativePackage": true,
   "publishConfig": {
@@ -50,8 +50,7 @@
     "test": "npm run unit",
     "posttest": "cp coverage/lcov.info coverage/unit.lcov",
     "unit:watch": "jest --watch",
-    "prepublish": "npm run build",
-    "postinstall": "node scripts/postinstall.js"
+    "prepublish": "npm run build"
   },
   "devDependencies": {
     "@react-native-community/cli": "20.1.0",

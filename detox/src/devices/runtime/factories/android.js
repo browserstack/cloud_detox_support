@@ -55,8 +55,19 @@ class Genycloud extends RuntimeDriverFactoryAndroid {
   }
 }
 
+class Noop extends RuntimeDriverFactoryAndroid {
+  _createDriver(deviceCookie, deps, configs) {
+    const props = {
+      adbName: undefined,
+    };
+    const CloudAndroidDriver  = require('../drivers/android/cloud/cloudAndroidDriver');
+    return new CloudAndroidDriver(deps, props);
+  }
+}
+
 module.exports = {
   AndroidEmulator,
   AndroidAttached,
   Genycloud,
+  Noop
 };
