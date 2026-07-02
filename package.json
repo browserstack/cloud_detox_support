@@ -2,14 +2,6 @@
   "name": "root",
   "private": true,
   "packageManager": "yarn@4.12.0",
-  "workspaces": [
-    "detox",
-    "detox-cli",
-    "detox/test",
-    "examples/*",
-    "generation",
-    "website"
-  ],
   "scripts": {
     "prepare": "husky",
     "docs:markdownlint": "markdownlint -p .remarkignore '**/*.md'",
