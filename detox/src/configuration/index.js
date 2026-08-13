@@ -138,7 +138,8 @@ async function composeDetoxConfig({
       'forceLocal': _.get(sessionConfig, 'forceLocal'),
       'localIdentifier': _.get(sessionConfig, 'localIdentifier'),
       'networkLogsIncludeHosts': _.get(sessionConfig, 'networkLogsIncludeHosts'),
-      'networkLogsExcludeHosts': _.get(sessionConfig, 'networkLogsExcludeHosts')
+      'networkLogsExcludeHosts': _.get(sessionConfig, 'networkLogsExcludeHosts'),
+      'autoGrantPermissions': _.get(sessionConfig, 'autoGrantPermissions')
     };
     sessionConfig.server += `?caps=${encodeURIComponent(JSON.stringify(query_param))}`;
   }

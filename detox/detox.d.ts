@@ -142,6 +142,7 @@ declare global {
             localIdentifier?: string;
             networkLogsIncludeHosts?: string[];
             networkLogsExcludeHosts?: string[];
+            autoGrantPermissions?: boolean;
         }
 
         interface DetoxCloudAuthConfig {
