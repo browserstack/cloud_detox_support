@@ -14,7 +14,7 @@ const log = require('../utils/logger').child({ cat: 'config' });
  */
 async function composeSessionConfig(options) {
   const { errorComposer, cliConfig, globalConfig, localConfig, isCloudSession } = options;
-  const cloudSupportedCaps = ['server', 'name', 'project', 'build', 'local', 'forceLocal', 'localIdentifier', 'networkLogsIncludeHosts', 'networkLogsExcludeHosts'];
+  const cloudSupportedCaps = ['server', 'name', 'project', 'build', 'local', 'forceLocal', 'localIdentifier', 'networkLogsIncludeHosts', 'networkLogsExcludeHosts', 'autoGrantPermissions'];
   const session = {
     ...globalConfig.session,
     ...localConfig.session,
@@ -88,6 +88,12 @@ async function composeSessionConfig(options) {
       const value = session.forceLocal;
       if (typeof value !== 'boolean') {
         throw errorComposer.invalidCloudSessionProperty('forceLocal', 'boolean');
+      }
+    }
+    if (session.autoGrantPermissions != null) {
+      const value = session.autoGrantPermissions;
+      if (typeof value !== 'boolean') {
+        throw errorComposer.invalidCloudSessionProperty('autoGrantPermissions', 'boolean');
       }
     }
     if (session.localIdentifier != null) {
