@@ -113,6 +113,11 @@ class CloudAndroidDriver extends DeviceDriverBase {
     await this.invocationManager.execute(call);
   }
 
+  async generateViewHierarchyXml(shouldInjectTestIds) {
+    const hierarchy = await this.invocationManager.execute(DetoxApi.generateViewHierarchyXml(shouldInjectTestIds));
+    return hierarchy.result;
+  }
+
   async _launchApp( bundleId, launchArgs) {
     if (!this.instrumentation) {
       const response = await this.invocationManager.executeCloudPlatform({
